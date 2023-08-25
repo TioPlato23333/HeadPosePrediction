@@ -3,6 +3,12 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from skimage import feature as feat
+from skimage import measure
+from skimage import filters
+from skimage.feature import hog
+from skimage.segmentation import active_contour
+from skimage.segmentation import chan_vese
 import sys
 import zipfile
 
@@ -30,21 +36,28 @@ class DataBase:
                                     'feature': feature})
                                 row_count += 1
 
-    def showImageIn3dPlot(self, image, feature):
+    def showImageIn3dPlot(self, image, feature, contour=[]):
         fig = plt.figure()
         width = image.shape[1]
         height = image.shape[0]
         # show 2D plot
-        ax1 = fig.add_subplot(121)
+        ax1 = fig.add_subplot(221)
         ax1.imshow(image, cmap='gray')
         plt.arrow(width / 2.0, height / 2.0, feature[0] * self.DISPLAY_COEFFICIENT, feature[1] * self.DISPLAY_COEFFICIENT, \
             width=self.DISPLAY_ARROW_SIZE)
         # show 3D plot
-        ax2 = fig.add_subplot(122, projection='3d')
+        ax2 = fig.add_subplot(222, projection='3d')
         xx, yy = np.meshgrid(np.linspace(0, width, width), np.linspace(0, height, height))
         ax2.quiver(width / 2.0, height / 2.0, self.DISPLAY_OFFSET, feature[0] * self.DISPLAY_COEFFICIENT, \
             feature[1] * self.DISPLAY_COEFFICIENT, feature[2] * self.DISPLAY_COEFFICIENT)
         ax2.contourf(xx, yy, image, zdir='z', offset=self.DISPLAY_OFFSET, cmap='gray')
+        # show chan vese result
+        ax3 = fig.add_subplot(223)
+        ax3.imshow(chan_vese(image), cmap='gray')
+        # show key points
+        if len(contour) > 0:
+            print('[INFO] Contour points number: ' + str(len(contour)))
+            ax3.plot(contour[:, 0], contour[:, 1], '-r', lw=3)
         plt.show()
 
     def loadImage(self, index=0):
@@ -59,7 +72,23 @@ class DataBase:
             zip_image = zip_file.read(image_file_name)
             image = cv2.imdecode(np.frombuffer(zip_image, np.uint8), cv2.IMREAD_GRAYSCALE)
             print('[INFO] Image feature: ' + ', '.join([str(x) for x in feature]))
-            self.showImageIn3dPlot(image, feature)
+            return image, feature
+
+    def extractKeyPoints(self, image):
+        # find contour
+        contour_image = chan_vese(image)
+        binary = np.asarray(contour_image, dtype='uint8')
+        contours, _= cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        largest_contour = np.reshape(max(contours, key=cv2.contourArea), (-1, 2))
+        # largest_contour = np.reshape(contours[0], (-1, 2))
+        contour_image = cv2.resize(binary, dsize=(int(contour_image.shape[1] / 2), int(contour_image.shape[0] / 2)))
+        pos_feat = contour_image.flatten()
+        print('[INFO] Position feature dimenstion: ' + str(np.shape(pos_feat)))
+        return largest_contour, pos_feat
+
+    def createHogFeature(self, image):
+        fd = hog(image, feature_vector=True)
+        print('[INFO] HOG feature dimenstion: ' + str(np.shape(fd)))
 
     # constant variables
     # database setting
@@ -77,6 +106,9 @@ class DataBase:
 if __name__ == '__main__':
     DATABASE_PATH = '../s00-09'
     database = DataBase(DATABASE_PATH)
-    database.loadImage(2)
+    image, feature = database.loadImage(99)
+    contour, pos_feat = database.extractKeyPoints(image)
+    database.createHogFeature(image)
+    database.showImageIn3dPlot(image, feature, contour)
     # test codes
     sys.exit()
