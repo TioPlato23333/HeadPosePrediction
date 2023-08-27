@@ -74,7 +74,7 @@ class DataBase:
             print('[INFO] Image feature: ' + ', '.join([str(x) for x in feature]))
             return image, feature
 
-    def extractKeyPoints(self, image):
+    def createPositionFeature(self, image):
         # find contour
         contour_image = chan_vese(image)
         binary = np.asarray(contour_image, dtype='uint8')
@@ -89,6 +89,16 @@ class DataBase:
     def createHogFeature(self, image):
         fd = hog(image, feature_vector=True)
         print('[INFO] HOG feature dimenstion: ' + str(np.shape(fd)))
+        return fd
+
+    def readFeatureFile(self, file):
+        with open(file) as csv_file:
+            csv_reader = csv.reader(csv_file)
+            for row in csv_reader:
+                feat = np.array([float(x) for x in row[0].split(',')])
+                golden = np.array([float(x) for x in row[1].split(',')])
+                print('[INFO] Image feature: ' + str(feat))
+                print('[INFO] Image golden feature: ' + str(golden))
 
     # constant variables
     # database setting
@@ -105,10 +115,18 @@ class DataBase:
 
 if __name__ == '__main__':
     DATABASE_PATH = '../s00-09'
+    FEATURE_PATH = 'feature.csv'
     database = DataBase(DATABASE_PATH)
-    image, feature = database.loadImage(99)
-    contour, pos_feat = database.extractKeyPoints(image)
-    database.createHogFeature(image)
-    database.showImageIn3dPlot(image, feature, contour)
+    with open(FEATURE_PATH, 'w', newline='') as csv_file:
+        writer = csv.writer(csv_file);
+        for index in range(0, len(database.image_list)):
+        # for index in range(0, len(database.image_list)):
+            image, golden_feat = database.loadImage(index)
+            contour, pos_feat = database.createPositionFeature(image)
+            hog_feat = database.createHogFeature(image)
+            current_feat = np.append(pos_feat, hog_feat)
+            writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
+    database.readFeatureFile(FEATURE_PATH)
     # test codes
+    # database.showImageIn3dPlot(image, golden_feat, contour)
     sys.exit()
