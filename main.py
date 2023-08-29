@@ -9,6 +9,9 @@ from skimage import filters
 from skimage.feature import hog
 from skimage.segmentation import active_contour
 from skimage.segmentation import chan_vese
+from sklearn import metrics
+from sklearn import svm
+from sklearn.multioutput import MultiOutputRegressor
 import sys
 import zipfile
 
@@ -36,7 +39,7 @@ class DataBase:
                                     'feature': feature})
                                 row_count += 1
 
-    def showImageIn3dPlot(self, image, feature, contour=[]):
+    def showImageIn3dPlot(self, image, feature, contour=[], predict_feat=[]):
         fig = plt.figure()
         width = image.shape[1]
         height = image.shape[0]
@@ -45,11 +48,18 @@ class DataBase:
         ax1.imshow(image, cmap='gray')
         plt.arrow(width / 2.0, height / 2.0, feature[0] * self.DISPLAY_COEFFICIENT, feature[1] * self.DISPLAY_COEFFICIENT, \
             width=self.DISPLAY_ARROW_SIZE)
+        if len(predict_feat) > 0:
+            plt.arrow(width / 2.0, height / 2.0, predict_feat[0] * self.DISPLAY_COEFFICIENT, \
+                predict_feat[1] * self.DISPLAY_COEFFICIENT, \
+                width=self.DISPLAY_ARROW_SIZE, color='red')
         # show 3D plot
         ax2 = fig.add_subplot(222, projection='3d')
         xx, yy = np.meshgrid(np.linspace(0, width, width), np.linspace(0, height, height))
         ax2.quiver(width / 2.0, height / 2.0, self.DISPLAY_OFFSET, feature[0] * self.DISPLAY_COEFFICIENT, \
             feature[1] * self.DISPLAY_COEFFICIENT, feature[2] * self.DISPLAY_COEFFICIENT)
+        if len(predict_feat) > 0:
+            ax2.quiver(width / 2.0, height / 2.0, self.DISPLAY_OFFSET, predict_feat[0] * self.DISPLAY_COEFFICIENT, \
+                predict_feat[1] * self.DISPLAY_COEFFICIENT, predict_feat[2] * self.DISPLAY_COEFFICIENT, color='red')
         ax2.contourf(xx, yy, image, zdir='z', offset=self.DISPLAY_OFFSET, cmap='gray')
         # show chan vese result
         ax3 = fig.add_subplot(223)
@@ -92,13 +102,35 @@ class DataBase:
         return fd
 
     def readFeatureFile(self, file):
+        print('[INFO] Load feature file...')
+        feat = []
+        golden = []
+        SAMPLE_LIMIT = 1000
         with open(file) as csv_file:
             csv_reader = csv.reader(csv_file)
+            count = 0
             for row in csv_reader:
-                feat = np.array([float(x) for x in row[0].split(',')])
-                golden = np.array([float(x) for x in row[1].split(',')])
-                print('[INFO] Image feature: ' + str(feat))
-                print('[INFO] Image golden feature: ' + str(golden))
+                if count >= SAMPLE_LIMIT:
+                    break
+                feat.append([float(x) for x in row[0].split(',')])
+                golden.append([float(x) for x in row[1].split(',')])
+                count += 1
+        return np.array(feat), np.array(golden)
+
+    def trainAndTest(self, feat, golden):
+        print('[INFO] Train and test the feature...')
+        n_sample = len(feat)
+        if n_sample != len(golden):
+            print('[ERROR] Feature size is not consistent with golden (' + str(len(feat)) + ' with ' + \
+                str(len(golden)) + ')')
+            return
+        n_train = int(n_sample * self.TRAIN_PERCENTAGE)
+        clf = MultiOutputRegressor(svm.SVR())
+        clf.fit(feat[0: n_train], golden[0: n_train])
+        result = clf.predict(feat[n_train: n_sample])
+        error = metrics.mean_squared_error(result, golden[n_train: n_sample])
+        print('[INFO] The prediction error is ' + str(error))
+        return range(n_train, n_sample), result
 
     # constant variables
     # database setting
@@ -110,13 +142,19 @@ class DataBase:
     DISPLAY_OFFSET = 100
     DISPLAY_COEFFICIENT = 100
     DISPLAY_ARROW_SIZE = 3
+    # SVM parameter
+    TRAIN_PERCENTAGE = 0.3
     # private variables
     image_list = []
 
 if __name__ == '__main__':
     DATABASE_PATH = '../s00-09'
     FEATURE_PATH = 'feature.csv'
+    LOAD_FEATURE_PATH = 'important_feature.csv'
+    PREDICTION_PATH = 'prediction.csv'
     database = DataBase(DATABASE_PATH)
+    '''
+    # generate feature csv
     with open(FEATURE_PATH, 'w', newline='') as csv_file:
         writer = csv.writer(csv_file);
         for index in range(0, len(database.image_list)):
@@ -126,7 +164,21 @@ if __name__ == '__main__':
             hog_feat = database.createHogFeature(image)
             current_feat = np.append(pos_feat, hog_feat)
             writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
-    database.readFeatureFile(FEATURE_PATH)
+    '''
+    feat, golden = database.readFeatureFile(LOAD_FEATURE_PATH)
+    index, result = database.trainAndTest(feat, golden)
+    '''
+    # generate prediction csv
+    with open(PREDICTION_PATH, 'w', newline='') as csv_file:
+        writer = csv.writer(csv_file);
+        for i in range(0, len(index)):
+            writer.writerow([index[i], ','.join([str(x) for x in result[i]])])
+    '''
+    SAMPLE_SHOW = 101
+    temp_index = index[SAMPLE_SHOW]
+    temp_result = result[SAMPLE_SHOW]
+    image, golden_feat = database.loadImage(temp_index)
+    contour, _ = database.createPositionFeature(image)
     # test codes
-    # database.showImageIn3dPlot(image, golden_feat, contour)
+    database.showImageIn3dPlot(image, golden_feat, contour, temp_result)
     sys.exit()
