@@ -3,6 +3,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import pickle
 from skimage import feature as feat
 from skimage import measure
 from skimage import filters
@@ -127,6 +128,8 @@ class DataBase:
         n_train = int(n_sample * self.TRAIN_PERCENTAGE)
         clf = MultiOutputRegressor(svm.SVR())
         clf.fit(feat[0: n_train], golden[0: n_train])
+        with open(self.MODEL_PATH, 'wb') as model_file:
+            pickle.dump(clf, model_file)
         result = clf.predict(feat[n_train: n_sample])
         error = metrics.mean_squared_error(result, golden[n_train: n_sample])
         print('[INFO] The prediction error is ' + str(error))
@@ -144,6 +147,7 @@ class DataBase:
     DISPLAY_ARROW_SIZE = 3
     # SVM parameter
     TRAIN_PERCENTAGE = 0.3
+    MODEL_PATH = 'model.pkl'
     # private variables
     image_list = []
 
