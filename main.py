@@ -135,9 +135,21 @@ class DataBase:
         print('[INFO] The prediction error is ' + str(error))
         return range(n_train, n_sample), result
 
+    def train(self, feat, golden):
+        print('[INFO] Train and test the feature...')
+        n_sample = len(feat)
+        if n_sample != len(golden):
+            print('[ERROR] Feature size is not consistent with golden (' + str(len(feat)) + ' with ' + \
+                str(len(golden)) + ')')
+            return
+        clf = MultiOutputRegressor(svm.SVR())
+        clf.fit(feat, golden)
+        with open(self.MODEL_PATH, 'wb') as model_file:
+            pickle.dump(clf, model_file)
+
     # constant variables
     # database setting
-    TEST_PATH = 'test'
+    TEST_PATH = 'synth'
     IMAGE_FILE_FORMAT = '{:08d}'
     IMAGE_EXTENSION = '.bmp'
     ZIP_EXTENSION = '.zip'
@@ -155,9 +167,8 @@ if __name__ == '__main__':
     DATABASE_PATH = '../s00-09'
     FEATURE_PATH = 'feature.csv'
     LOAD_FEATURE_PATH = 'important_feature.csv'
-    PREDICTION_PATH = 'prediction.csv'
+    # PREDICTION_PATH = 'prediction.csv'
     database = DataBase(DATABASE_PATH)
-    '''
     # generate feature csv
     with open(FEATURE_PATH, 'w', newline='') as csv_file:
         writer = csv.writer(csv_file);
@@ -168,21 +179,20 @@ if __name__ == '__main__':
             hog_feat = database.createHogFeature(image)
             current_feat = np.append(pos_feat, hog_feat)
             writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
-    '''
-    feat, golden = database.readFeatureFile(LOAD_FEATURE_PATH)
-    index, result = database.trainAndTest(feat, golden)
+    # feat, golden = database.readFeatureFile(LOAD_FEATURE_PATH)
+    # index, result = database.trainAndTest(feat, golden)
+    # test codes
     '''
     # generate prediction csv
     with open(PREDICTION_PATH, 'w', newline='') as csv_file:
         writer = csv.writer(csv_file);
         for i in range(0, len(index)):
             writer.writerow([index[i], ','.join([str(x) for x in result[i]])])
-    '''
     SAMPLE_SHOW = 101
     temp_index = index[SAMPLE_SHOW]
     temp_result = result[SAMPLE_SHOW]
     image, golden_feat = database.loadImage(temp_index)
     contour, _ = database.createPositionFeature(image)
-    # test codes
     database.showImageIn3dPlot(image, golden_feat, contour, temp_result)
+    '''
     sys.exit()
