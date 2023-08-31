@@ -106,7 +106,7 @@ class DataBase:
         print('[INFO] Load feature file...')
         feat = []
         golden = []
-        SAMPLE_LIMIT = 1000
+        SAMPLE_LIMIT = 20000
         with open(file) as csv_file:
             csv_reader = csv.reader(csv_file)
             count = 0
@@ -147,9 +147,11 @@ class DataBase:
         with open(self.MODEL_PATH, 'wb') as model_file:
             pickle.dump(clf, model_file)
 
+    # def test(self, feat):
+
     # constant variables
     # database setting
-    TEST_PATH = 'synth'
+    TEST_PATH = 'test'
     IMAGE_FILE_FORMAT = '{:08d}'
     IMAGE_EXTENSION = '.bmp'
     ZIP_EXTENSION = '.zip'
@@ -166,7 +168,7 @@ class DataBase:
 if __name__ == '__main__':
     DATABASE_PATH = '../s00-09'
     FEATURE_PATH = 'feature.csv'
-    LOAD_FEATURE_PATH = 'important_feature.csv'
+    # LOAD_FEATURE_PATH = '../s00-09/synth_feature.csv'
     # PREDICTION_PATH = 'prediction.csv'
     database = DataBase(DATABASE_PATH)
     # generate feature csv
@@ -180,7 +182,7 @@ if __name__ == '__main__':
             current_feat = np.append(pos_feat, hog_feat)
             writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
     # feat, golden = database.readFeatureFile(LOAD_FEATURE_PATH)
-    # index, result = database.trainAndTest(feat, golden)
+    # database.train(feat, golden)
     # test codes
     '''
     # generate prediction csv
