@@ -12,7 +12,9 @@ from skimage.segmentation import active_contour
 from skimage.segmentation import chan_vese
 from sklearn import metrics
 from sklearn import svm
+from sklearn.decomposition import PCA
 from sklearn.multioutput import MultiOutputRegressor
+from sklearn.preprocessing import StandardScaler
 import sys
 import zipfile
 
@@ -87,56 +89,87 @@ class DataBase:
 
     def createPositionFeature(self, image):
         # find contour
-        contour_image = chan_vese(image)
-        binary = np.asarray(contour_image, dtype='uint8')
-        contours, _= cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        largest_contour = np.reshape(max(contours, key=cv2.contourArea), (-1, 2))
+        contour_image = chan_vese(image, init_level_set='disk')
+        binary = np.asarray(contour_image, dtype='float')
+        # contours, _= cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # largest_contour = np.reshape(max(contours, key=cv2.contourArea), (-1, 2))
         # largest_contour = np.reshape(contours[0], (-1, 2))
-        contour_image = cv2.resize(binary, dsize=(int(contour_image.shape[1] / 2), int(contour_image.shape[0] / 2)))
+        contour_image = cv2.resize(binary, interpolation=cv2.INTER_AREA, dsize=(int(contour_image.shape[1] / 8), \
+            int(contour_image.shape[0] / 8)))
         pos_feat = contour_image.flatten()
         print('[INFO] Position feature dimenstion: ' + str(np.shape(pos_feat)))
-        return largest_contour, pos_feat
+        return [], pos_feat
 
     def createHogFeature(self, image):
-        fd = hog(image, feature_vector=True)
+        fd = hog(image, feature_vector=True, pixels_per_cell=(16, 16), cells_per_block=(1, 1))
         print('[INFO] HOG feature dimenstion: ' + str(np.shape(fd)))
         return fd
 
-    def readFeatureFile(self, file):
+    def readFeatureFile(self, file, sample_limit=-1, read_each_row=1):
         print('[INFO] Load feature file...')
         feat = []
         golden = []
-        SAMPLE_LIMIT = 20000
         with open(file) as csv_file:
             csv_reader = csv.reader(csv_file)
             count = 0
             for row in csv_reader:
-                if count >= SAMPLE_LIMIT:
+                count += 1
+                if sample_limit > 0 and count > sample_limit:
                     break
+                if count % read_each_row != 0:
+                    continue
                 feat.append([float(x) for x in row[0].split(',')])
                 golden.append([float(x) for x in row[1].split(',')])
-                count += 1
+        print('[INFO] ' + str(count) + ' rows are read')
         return np.array(feat), np.array(golden)
 
-    def trainAndTest(self, feat, golden):
+    def trainAndTest(self, train_file, test_file):
+        TRAIN_CLUSTER_SIZE = 144 * 6
+        TEST_CLUSTER_SIZE = 8 * 6
+        # TRAIN_MAX_LINE = 460800
+        # TEST_MAX_LINE = 25600
+        CASE_NUM = 520
         print('[INFO] Train and test the feature...')
-        n_sample = len(feat)
-        if n_sample != len(golden):
-            print('[ERROR] Feature size is not consistent with golden (' + str(len(feat)) + ' with ' + \
-                str(len(golden)) + ')')
-            return
-        n_train = int(n_sample * self.TRAIN_PERCENTAGE)
-        clf = MultiOutputRegressor(svm.SVR())
-        clf.fit(feat[0: n_train], golden[0: n_train])
-        with open(self.MODEL_PATH, 'wb') as model_file:
-            pickle.dump(clf, model_file)
-        result = clf.predict(feat[n_train: n_sample])
-        error = metrics.mean_squared_error(result, golden[n_train: n_sample])
-        print('[INFO] The prediction error is ' + str(error))
-        return range(n_train, n_sample), result
+        with open(train_file) as csv_file_train, open(test_file) as csv_file_test:
+            csv_reader_train = csv.reader(csv_file_train)
+            csv_reader_test = csv.reader(csv_file_test)
+            diff = np.array([])
+            for i in range(0, CASE_NUM):
+                print('[INFO] Processing case ' + str(i) + '/' + str(CASE_NUM) + '...')
+                train_feat = []
+                train_golden = []
+                count = 0
+                for row in csv_reader_train:
+                    if count >= TRAIN_CLUSTER_SIZE:
+                        break
+                    train_feat.append([float(x) for x in row[0].split(',')][540: -1])
+                    train_golden.append([float(x) for x in row[1].split(',')])
+                    count += 1
+                test_feat = []
+                test_golden = []
+                count = 0
+                for row in csv_reader_test:
+                    if count >= TEST_CLUSTER_SIZE:
+                        break
+                    test_feat.append([float(x) for x in row[0].split(',')][540: -1])
+                    test_golden.append([float(x) for x in row[1].split(',')])
+                    count += 1
+                # train model
+                clf = MultiOutputRegressor(svm.SVR())
+                clf.fit(train_feat, train_golden)
+                # test model
+                result = clf.predict(test_feat)
+                product = [np.clip(np.dot(result[i] / np.linalg.norm(result[i]), \
+                    test_golden[i] / np.linalg.norm(test_golden[i])), \
+                    -1.0, 1.0) for i in range(0, len(result))]
+                diff = np.append(diff, np.rad2deg(np.arccos(product)))
+            print('[INFO] The prediction error (angle) is ' + str(np.average(diff)) + '(' + str(np.std(diff)) + ')')
+            # ALL: [INFO] The prediction error (angle) is 15.225444260273674(10.584194597925089)
+            # CONTOUR: [INFO] The prediction error (angle) is 16.32814617323653(11.187172392966717)
+            # HOG: [INFO] The prediction error (angle) is 12.397089048993369(8.692957147909784)
 
     def train(self, feat, golden):
-        print('[INFO] Train and test the feature...')
+        print('[INFO] Train the feature...')
         n_sample = len(feat)
         if n_sample != len(golden):
             print('[ERROR] Feature size is not consistent with golden (' + str(len(feat)) + ' with ' + \
@@ -147,11 +180,31 @@ class DataBase:
         with open(self.MODEL_PATH, 'wb') as model_file:
             pickle.dump(clf, model_file)
 
-    # def test(self, feat):
+    def test(self, feat, golden):
+        if len(feat) != len(golden):
+            print('[ERROR] Feature size is not consistent with golden (' + str(len(feat)) + ' with ' + \
+                str(len(golden)) + ')')
+            return
+        with open(self.MODEL_PATH, 'rb') as model_file:
+            clf = pickle.load(model_file)
+        result = clf.predict(feat)
+        product = [np.clip(np.dot(result[i] / np.linalg.norm(result[i]), golden[i] / np.linalg.norm(golden[i])), \
+            -1.0, 1.0) for i in range(0, len(result))]
+        diff = np.rad2deg(np.arccos(product))
+        sorted_diff = np.sort(diff)
+        print('[INFO] The prediction error is ' + str(metrics.mean_squared_error(result, golden)))
+        print('[INFO] The prediction error (angle) is ' + str(np.average(diff)) + '(' + str(np.std(diff)) + ')')
+        print('[INFO] The best 12800 prediction error (angle) is ' + str(np.average(sorted_diff[0: 12800])) + \
+            '(' + str(np.std(sorted_diff[0: 12800])) + ')')
+        print('[INFO] The worst 2000 prediction error (angle) is ' + str(np.average(sorted_diff[-2000:])) + \
+            '(' + str(np.std(sorted_diff[-2000:])) + ')')
+        # plt.hist(diff, bins=20)
+        # plt.show()
+        return np.argsort(diff), result
 
     # constant variables
     # database setting
-    TEST_PATH = 'test'
+    TEST_PATH = 'synth'
     IMAGE_FILE_FORMAT = '{:08d}'
     IMAGE_EXTENSION = '.bmp'
     ZIP_EXTENSION = '.zip'
@@ -168,31 +221,36 @@ class DataBase:
 if __name__ == '__main__':
     DATABASE_PATH = '../s00-09'
     FEATURE_PATH = 'feature.csv'
-    # LOAD_FEATURE_PATH = '../s00-09/synth_feature.csv'
+    LOAD_FEATURE_PATH = '../s00-09/test_feature.csv'
+    LOAD_FEATURE_PATH2 = '../s00-09/synth_feature.csv'
     # PREDICTION_PATH = 'prediction.csv'
     database = DataBase(DATABASE_PATH)
+    # database.trainAndTest(LOAD_FEATURE_PATH2, LOAD_FEATURE_PATH)
     # generate feature csv
     with open(FEATURE_PATH, 'w', newline='') as csv_file:
-        writer = csv.writer(csv_file);
-        for index in range(0, len(database.image_list)):
-        # for index in range(0, len(database.image_list)):
+        writer = csv.writer(csv_file)
+        interval = 1
+        length = len(database.image_list)
+        for index in range(0, length):
+            if index % interval != 0 :
+                continue
+            print('[INFO] Progress: ' + str(index) + '/' + str(length))
             image, golden_feat = database.loadImage(index)
+            # downsample image
             contour, pos_feat = database.createPositionFeature(image)
             hog_feat = database.createHogFeature(image)
             current_feat = np.append(pos_feat, hog_feat)
             writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
-    # feat, golden = database.readFeatureFile(LOAD_FEATURE_PATH)
-    # database.train(feat, golden)
-    # test codes
+    # train/test
+    # feat_train, golden1 = database.readFeatureFile(LOAD_FEATURE_PATH2, 2000)
+    # feat_test, golden2 = database.readFeatureFile(LOAD_FEATURE_PATH)
+    # database.train(feat_train, golden1)
+    # index, result = database.test(feat_test, golden2)
     '''
-    # generate prediction csv
-    with open(PREDICTION_PATH, 'w', newline='') as csv_file:
-        writer = csv.writer(csv_file);
-        for i in range(0, len(index)):
-            writer.writerow([index[i], ','.join([str(x) for x in result[i]])])
-    SAMPLE_SHOW = 101
+    # test codes
+    SAMPLE_SHOW = 20000
     temp_index = index[SAMPLE_SHOW]
-    temp_result = result[SAMPLE_SHOW]
+    temp_result = result[temp_index]
     image, golden_feat = database.loadImage(temp_index)
     contour, _ = database.createPositionFeature(image)
     database.showImageIn3dPlot(image, golden_feat, contour, temp_result)
