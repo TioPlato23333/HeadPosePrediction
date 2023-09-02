@@ -142,7 +142,7 @@ class DataBase:
                 for row in csv_reader_train:
                     if count >= TRAIN_CLUSTER_SIZE:
                         break
-                    train_feat.append([float(x) for x in row[0].split(',')][540: -1])
+                    train_feat.append([float(x) for x in row[0].split(',')][0: 28])
                     train_golden.append([float(x) for x in row[1].split(',')])
                     count += 1
                 test_feat = []
@@ -151,7 +151,7 @@ class DataBase:
                 for row in csv_reader_test:
                     if count >= TEST_CLUSTER_SIZE:
                         break
-                    test_feat.append([float(x) for x in row[0].split(',')][540: -1])
+                    test_feat.append([float(x) for x in row[0].split(',')][0: 28])
                     test_golden.append([float(x) for x in row[1].split(',')])
                     count += 1
                 # train model
@@ -221,11 +221,12 @@ class DataBase:
 if __name__ == '__main__':
     DATABASE_PATH = '../s00-09'
     FEATURE_PATH = 'feature.csv'
-    LOAD_FEATURE_PATH = '../s00-09/test_feature.csv'
-    LOAD_FEATURE_PATH2 = '../s00-09/synth_feature.csv'
+    LOAD_FEATURE_PATH = '../s00-09/test_feature5.csv'
+    LOAD_FEATURE_PATH2 = '../s00-09/synth_feature5.csv'
     # PREDICTION_PATH = 'prediction.csv'
     database = DataBase(DATABASE_PATH)
-    # database.trainAndTest(LOAD_FEATURE_PATH2, LOAD_FEATURE_PATH)
+    database.trainAndTest(LOAD_FEATURE_PATH2, LOAD_FEATURE_PATH)
+    '''
     # generate feature csv
     with open(FEATURE_PATH, 'w', newline='') as csv_file:
         writer = csv.writer(csv_file)
@@ -241,6 +242,7 @@ if __name__ == '__main__':
             hog_feat = database.createHogFeature(image)
             current_feat = np.append(pos_feat, hog_feat)
             writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
+    '''
     # train/test
     # feat_train, golden1 = database.readFeatureFile(LOAD_FEATURE_PATH2, 2000)
     # feat_test, golden2 = database.readFeatureFile(LOAD_FEATURE_PATH)
