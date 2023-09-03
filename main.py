@@ -202,6 +202,26 @@ class DataBase:
         # plt.show()
         return np.argsort(diff), result
 
+    def extractFeatureToFile(self, file_path):
+        return
+        '''
+        # generate feature csv
+        with open(FEATURE_PATH, 'w', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            interval = 1
+            length = len(database.image_list)
+            for index in range(0, length):
+                if index % interval != 0 :
+                    continue
+                print('[INFO] Progress: ' + str(index) + '/' + str(length))
+                image, golden_feat = database.loadImage(index)
+                # downsample image
+                contour, pos_feat = database.createPositionFeature(image)
+                hog_feat = database.createHogFeature(image)
+                current_feat = np.append(pos_feat, hog_feat)
+                writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
+        '''
+
     # constant variables
     # database setting
     TEST_PATH = 'synth'
@@ -226,23 +246,6 @@ if __name__ == '__main__':
     # PREDICTION_PATH = 'prediction.csv'
     database = DataBase(DATABASE_PATH)
     database.trainAndTest(LOAD_FEATURE_PATH2, LOAD_FEATURE_PATH)
-    '''
-    # generate feature csv
-    with open(FEATURE_PATH, 'w', newline='') as csv_file:
-        writer = csv.writer(csv_file)
-        interval = 1
-        length = len(database.image_list)
-        for index in range(0, length):
-            if index % interval != 0 :
-                continue
-            print('[INFO] Progress: ' + str(index) + '/' + str(length))
-            image, golden_feat = database.loadImage(index)
-            # downsample image
-            contour, pos_feat = database.createPositionFeature(image)
-            hog_feat = database.createHogFeature(image)
-            current_feat = np.append(pos_feat, hog_feat)
-            writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
-    '''
     # train/test
     # feat_train, golden1 = database.readFeatureFile(LOAD_FEATURE_PATH2, 2000)
     # feat_test, golden2 = database.readFeatureFile(LOAD_FEATURE_PATH)
