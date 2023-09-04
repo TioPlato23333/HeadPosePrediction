@@ -142,7 +142,7 @@ class DataBase:
                 for row in csv_reader_train:
                     if count >= TRAIN_CLUSTER_SIZE:
                         break
-                    train_feat.append([float(x) for x in row[0].split(',')][0: 28])
+                    train_feat.append([float(x) for x in row[0].split(',')])
                     train_golden.append([float(x) for x in row[1].split(',')])
                     count += 1
                 test_feat = []
@@ -151,7 +151,7 @@ class DataBase:
                 for row in csv_reader_test:
                     if count >= TEST_CLUSTER_SIZE:
                         break
-                    test_feat.append([float(x) for x in row[0].split(',')][0: 28])
+                    test_feat.append([float(x) for x in row[0].split(',')])
                     test_golden.append([float(x) for x in row[1].split(',')])
                     count += 1
                 # train model
@@ -202,29 +202,25 @@ class DataBase:
         # plt.show()
         return np.argsort(diff), result
 
-    def extractFeatureToFile(self, file_path):
-        return
-        '''
+    def extractFeatureToFile(self, file_path, max_sample_num=-1):
         # generate feature csv
         with open(FEATURE_PATH, 'w', newline='') as csv_file:
             writer = csv.writer(csv_file)
-            interval = 1
-            length = len(database.image_list)
-            for index in range(0, length):
-                if index % interval != 0 :
-                    continue
-                print('[INFO] Progress: ' + str(index) + '/' + str(length))
+            list_len = len(database.image_list)
+            if max_sample_num > 0:
+                list_len = max_sample_num
+            for index in range(0, list_len):
+                print('[INFO] Progress: ' + str(index) + '/' + str(list_len))
                 image, golden_feat = database.loadImage(index)
                 # downsample image
                 contour, pos_feat = database.createPositionFeature(image)
                 hog_feat = database.createHogFeature(image)
                 current_feat = np.append(pos_feat, hog_feat)
                 writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
-        '''
 
     # constant variables
     # database setting
-    TEST_PATH = 'synth'
+    TEST_PATH = 'test'
     IMAGE_FILE_FORMAT = '{:08d}'
     IMAGE_EXTENSION = '.bmp'
     ZIP_EXTENSION = '.zip'
@@ -245,7 +241,8 @@ if __name__ == '__main__':
     LOAD_FEATURE_PATH2 = '../s00-09/synth_feature5.csv'
     # PREDICTION_PATH = 'prediction.csv'
     database = DataBase(DATABASE_PATH)
-    database.trainAndTest(LOAD_FEATURE_PATH2, LOAD_FEATURE_PATH)
+    database.extractFeatureToFile(FEATURE_PATH)
+    # database.trainAndTest(LOAD_FEATURE_PATH2, LOAD_FEATURE_PATH)
     # train/test
     # feat_train, golden1 = database.readFeatureFile(LOAD_FEATURE_PATH2, 2000)
     # feat_test, golden2 = database.readFeatureFile(LOAD_FEATURE_PATH)
