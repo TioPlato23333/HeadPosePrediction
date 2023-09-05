@@ -1,5 +1,6 @@
 import csv
 import cv2
+from enum import Enum
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -18,19 +19,23 @@ from sklearn.preprocessing import StandardScaler
 import sys
 import zipfile
 
+class DataBaseType:
+    TEST_TYPE = 'test'
+    SYNTH_TYPE = 'synth'
+
 class DataBase:
-    def __init__(self, database_path):
+    def __init__(self, database_path, database_type=DataBaseType.TEST_TYPE):
         print('[INFO] Loading database image list...')
         for subject_name in os.listdir(database_path):
             subject_path = os.path.join(database_path, subject_name)
             if os.path.isdir(subject_path):
-                test_path = os.path.join(subject_path, self.TEST_PATH)
-                for file_name in os.listdir(test_path):
-                    file_path = os.path.join(test_path, file_name)
+                case_path = os.path.join(subject_path, database_type)
+                for file_name in os.listdir(case_path):
+                    file_path = os.path.join(case_path, file_name)
                     if os.path.isfile(file_path) and file_path.endswith('.csv'):
                         # read zip file
                         file_stem = os.path.splitext(file_name)[0]
-                        zip_file_path = os.path.join(test_path, file_stem + self.ZIP_EXTENSION)
+                        zip_file_path = os.path.join(case_path, file_stem + self.ZIP_EXTENSION)
                         with open(file_path) as csv_file:
                             # read csv file
                             csv_reader = csv.reader(csv_file)
@@ -210,7 +215,7 @@ class DataBase:
             if max_sample_num > 0:
                 list_len = max_sample_num
             for index in range(0, list_len):
-                print('[INFO] Progress: ' + str(index) + '/' + str(list_len))
+                print('[INFO] Progress: ' + str(index + 1) + '/' + str(list_len))
                 image, golden_feat = database.loadImage(index)
                 # downsample image
                 contour, pos_feat = database.createPositionFeature(image)
@@ -220,7 +225,6 @@ class DataBase:
 
     # constant variables
     # database setting
-    TEST_PATH = 'test'
     IMAGE_FILE_FORMAT = '{:08d}'
     IMAGE_EXTENSION = '.bmp'
     ZIP_EXTENSION = '.zip'
@@ -240,8 +244,8 @@ if __name__ == '__main__':
     LOAD_FEATURE_PATH = '../s00-09/test_feature5.csv'
     LOAD_FEATURE_PATH2 = '../s00-09/synth_feature5.csv'
     # PREDICTION_PATH = 'prediction.csv'
-    database = DataBase(DATABASE_PATH)
-    database.extractFeatureToFile(FEATURE_PATH)
+    database = DataBase(DATABASE_PATH, DataBaseType.SYNTH_TYPE)
+    database.extractFeatureToFile(FEATURE_PATH, max_sample_num=10)
     # database.trainAndTest(LOAD_FEATURE_PATH2, LOAD_FEATURE_PATH)
     # train/test
     # feat_train, golden1 = database.readFeatureFile(LOAD_FEATURE_PATH2, 2000)
