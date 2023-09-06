@@ -22,6 +22,8 @@ import zipfile
 class DataBaseType:
     TEST_TYPE = 'test'
     SYNTH_TYPE = 'synth'
+    EXTRACT_FEAT_MODE = 1
+    TRAIN_TEST_MODE = 2
 
 class DataBase:
     def __init__(self, database_path, database_type=DataBaseType.TEST_TYPE):
@@ -47,15 +49,15 @@ class DataBase:
                                     'feature': feature})
                                 row_count += 1
 
-    def showImageIn3dPlot(self, image, feature, contour=[], predict_feat=[]):
+    def showImageIn3dPlot(self, image, golden_feat, contour=[], predict_feat=[]):
         fig = plt.figure()
         width = image.shape[1]
         height = image.shape[0]
         # show 2D plot
         ax1 = fig.add_subplot(221)
         ax1.imshow(image, cmap='gray')
-        plt.arrow(width / 2.0, height / 2.0, feature[0] * self.DISPLAY_COEFFICIENT, feature[1] * self.DISPLAY_COEFFICIENT, \
-            width=self.DISPLAY_ARROW_SIZE)
+        plt.arrow(width / 2.0, height / 2.0, golden_feat[0] * self.DISPLAY_COEFFICIENT, \
+            golden_feat[1] * self.DISPLAY_COEFFICIENT, width=self.DISPLAY_ARROW_SIZE)
         if len(predict_feat) > 0:
             plt.arrow(width / 2.0, height / 2.0, predict_feat[0] * self.DISPLAY_COEFFICIENT, \
                 predict_feat[1] * self.DISPLAY_COEFFICIENT, \
@@ -63,8 +65,8 @@ class DataBase:
         # show 3D plot
         ax2 = fig.add_subplot(222, projection='3d')
         xx, yy = np.meshgrid(np.linspace(0, width, width), np.linspace(0, height, height))
-        ax2.quiver(width / 2.0, height / 2.0, self.DISPLAY_OFFSET, feature[0] * self.DISPLAY_COEFFICIENT, \
-            feature[1] * self.DISPLAY_COEFFICIENT, feature[2] * self.DISPLAY_COEFFICIENT)
+        ax2.quiver(width / 2.0, height / 2.0, self.DISPLAY_OFFSET, golden_feat[0] * self.DISPLAY_COEFFICIENT, \
+            golden_feat[1] * self.DISPLAY_COEFFICIENT, golden_feat[2] * self.DISPLAY_COEFFICIENT)
         if len(predict_feat) > 0:
             ax2.quiver(width / 2.0, height / 2.0, self.DISPLAY_OFFSET, predict_feat[0] * self.DISPLAY_COEFFICIENT, \
                 predict_feat[1] * self.DISPLAY_COEFFICIENT, predict_feat[2] * self.DISPLAY_COEFFICIENT, color='red')
@@ -84,31 +86,34 @@ class DataBase:
             sys.exit(-1)
         zip_file_path = self.image_list[index]['zip']
         image_file_name = self.image_list[index]['name']
-        feature = self.image_list[index]['feature']
+        golden_feat = self.image_list[index]['feature']
         with zipfile.ZipFile(zip_file_path, 'r') as zip_file:
             print('[INFO] Open image file: ' + image_file_name)
             zip_image = zip_file.read(image_file_name)
             image = cv2.imdecode(np.frombuffer(zip_image, np.uint8), cv2.IMREAD_GRAYSCALE)
-            print('[INFO] Image feature: ' + ', '.join([str(x) for x in feature]))
-            return image, feature
+            print('[INFO] Image feature: ' + ', '.join([str(x) for x in golden_feat]))
+            return image, golden_feat
 
-    def createPositionFeature(self, image):
+    def createPositionFeature(self, image, return_contour=False):
         # find contour
         contour_image = chan_vese(image, init_level_set='disk')
         binary = np.asarray(contour_image, dtype='float')
-        # contours, _= cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # largest_contour = np.reshape(max(contours, key=cv2.contourArea), (-1, 2))
-        # largest_contour = np.reshape(contours[0], (-1, 2))
-        contour_image = cv2.resize(binary, interpolation=cv2.INTER_AREA, dsize=(int(contour_image.shape[1] / 8), \
-            int(contour_image.shape[0] / 8)))
+        contour_image = cv2.resize(binary, interpolation=cv2.INTER_AREA, \
+            dsize=(int(contour_image.shape[1] / self.POS_FEATURE_DOWNSIZE), \
+                int(contour_image.shape[0] / self.POS_FEATURE_DOWNSIZE)))
         pos_feat = contour_image.flatten()
         print('[INFO] Position feature dimenstion: ' + str(np.shape(pos_feat)))
-        return [], pos_feat
+        if return_contour:
+            contours, _= cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            largest_contour = np.reshape(max(contours, key=cv2.contourArea), (-1, 2))
+            return pos_feat, largest_contour
+        return pos_feat, []
 
     def createHogFeature(self, image):
-        fd = hog(image, feature_vector=True, pixels_per_cell=(16, 16), cells_per_block=(1, 1))
-        print('[INFO] HOG feature dimenstion: ' + str(np.shape(fd)))
-        return fd
+        hog_result = hog(image, feature_vector=True, pixels_per_cell=(self.HOG_PIXEL_WINDOW, self.HOG_PIXEL_WINDOW), \
+            cells_per_block=(1, 1))
+        print('[INFO] HOG feature dimenstion: ' + str(np.shape(hog_result)))
+        return hog_result
 
     def readFeatureFile(self, file, sample_limit=-1, read_each_row=1):
         print('[INFO] Load feature file...')
@@ -131,8 +136,6 @@ class DataBase:
     def trainAndTest(self, train_file, test_file):
         TRAIN_CLUSTER_SIZE = 144 * 6
         TEST_CLUSTER_SIZE = 8 * 6
-        # TRAIN_MAX_LINE = 460800
-        # TEST_MAX_LINE = 25600
         CASE_NUM = 520
         print('[INFO] Train and test the feature...')
         with open(train_file) as csv_file_train, open(test_file) as csv_file_test:
@@ -140,14 +143,16 @@ class DataBase:
             csv_reader_test = csv.reader(csv_file_test)
             diff = np.array([])
             for i in range(0, CASE_NUM):
-                print('[INFO] Processing case ' + str(i) + '/' + str(CASE_NUM) + '...')
+                print('[INFO] Processing case ' + str(i + 1) + '/' + str(CASE_NUM) + '...')
                 train_feat = []
                 train_golden = []
                 count = 0
                 for row in csv_reader_train:
                     if count >= TRAIN_CLUSTER_SIZE:
                         break
-                    train_feat.append([float(x) for x in row[0].split(',')])
+                    # train_feat.append([float(x) for x in row[0].split(',')])
+                    # train_feat.append([float(x) for x in row[0].split(',')][0: 28])
+                    train_feat.append([float(x) for x in row[0].split(',')][28: -1])
                     train_golden.append([float(x) for x in row[1].split(',')])
                     count += 1
                 test_feat = []
@@ -156,7 +161,9 @@ class DataBase:
                 for row in csv_reader_test:
                     if count >= TEST_CLUSTER_SIZE:
                         break
-                    test_feat.append([float(x) for x in row[0].split(',')])
+                    # test_feat.append([float(x) for x in row[0].split(',')])
+                    # test_feat.append([float(x) for x in row[0].split(',')][0: 28])
+                    test_feat.append([float(x) for x in row[0].split(',')][28: -1])
                     test_golden.append([float(x) for x in row[1].split(',')])
                     count += 1
                 # train model
@@ -169,9 +176,14 @@ class DataBase:
                     -1.0, 1.0) for i in range(0, len(result))]
                 diff = np.append(diff, np.rad2deg(np.arccos(product)))
             print('[INFO] The prediction error (angle) is ' + str(np.average(diff)) + '(' + str(np.std(diff)) + ')')
-            # ALL: [INFO] The prediction error (angle) is 15.225444260273674(10.584194597925089)
-            # CONTOUR: [INFO] The prediction error (angle) is 16.32814617323653(11.187172392966717)
-            # HOG: [INFO] The prediction error (angle) is 12.397089048993369(8.692957147909784)
+            # other information
+            # TRAIN_MAX_LINE = 460800
+            # TEST_MAX_LINE = 25600
+            # POS_FEAT_DIM = 28
+            # HOG_FEAT_DIM = 54
+            # ALL: The prediction error (angle) is 15.244228263459785(11.286796067850444)
+            # CONTOUR: The prediction error (angle) is 17.705939503166988(13.112084351717627)
+            # HOG: The prediction error (angle) is 16.80747035155666(11.283064643228085)
 
     def train(self, feat, golden):
         print('[INFO] Train the feature...')
@@ -196,13 +208,14 @@ class DataBase:
         product = [np.clip(np.dot(result[i] / np.linalg.norm(result[i]), golden[i] / np.linalg.norm(golden[i])), \
             -1.0, 1.0) for i in range(0, len(result))]
         diff = np.rad2deg(np.arccos(product))
-        sorted_diff = np.sort(diff)
         print('[INFO] The prediction error is ' + str(metrics.mean_squared_error(result, golden)))
         print('[INFO] The prediction error (angle) is ' + str(np.average(diff)) + '(' + str(np.std(diff)) + ')')
-        print('[INFO] The best 12800 prediction error (angle) is ' + str(np.average(sorted_diff[0: 12800])) + \
-            '(' + str(np.std(sorted_diff[0: 12800])) + ')')
-        print('[INFO] The worst 2000 prediction error (angle) is ' + str(np.average(sorted_diff[-2000:])) + \
-            '(' + str(np.std(sorted_diff[-2000:])) + ')')
+        # show result distribution
+        # sorted_diff = np.sort(diff)
+        # print('[INFO] The best 12800 prediction error (angle) is ' + str(np.average(sorted_diff[0: 12800])) + \
+        #     '(' + str(np.std(sorted_diff[0: 12800])) + ')')
+        # print('[INFO] The worst 2000 prediction error (angle) is ' + str(np.average(sorted_diff[-2000:])) + \
+        #     '(' + str(np.std(sorted_diff[-2000:])) + ')')
         # plt.hist(diff, bins=20)
         # plt.show()
         return np.argsort(diff), result
@@ -232,24 +245,29 @@ class DataBase:
     DISPLAY_OFFSET = 100
     DISPLAY_COEFFICIENT = 100
     DISPLAY_ARROW_SIZE = 3
+    # feature setting
+    POS_FEATURE_DOWNSIZE = 8
+    HOG_PIXEL_WINDOW = 16
     # SVM parameter
-    TRAIN_PERCENTAGE = 0.3
-    MODEL_PATH = 'model.pkl'
+    # MODEL_PATH = 'model.pkl'
     # private variables
     image_list = []
 
 if __name__ == '__main__':
     DATABASE_PATH = '../s00-09'
     FEATURE_PATH = 'feature.csv'
-    LOAD_FEATURE_PATH = '../s00-09/test_feature5.csv'
-    LOAD_FEATURE_PATH2 = '../s00-09/synth_feature5.csv'
-    # PREDICTION_PATH = 'prediction.csv'
+    LOAD_FEATURE_PATH_TEST = '../s00-09/test_feature5.csv'
+    LOAD_FEATURE_PATH_TRAIN = '../s00-09/synth_feature5.csv'
+    MODE = DataBaseType.TRAIN_TEST_MODE
     database = DataBase(DATABASE_PATH, DataBaseType.SYNTH_TYPE)
-    database.extractFeatureToFile(FEATURE_PATH, max_sample_num=10)
-    # database.trainAndTest(LOAD_FEATURE_PATH2, LOAD_FEATURE_PATH)
-    # train/test
-    # feat_train, golden1 = database.readFeatureFile(LOAD_FEATURE_PATH2, 2000)
-    # feat_test, golden2 = database.readFeatureFile(LOAD_FEATURE_PATH)
+    # execute feature extraction or train/test
+    if MODE == DataBaseType.EXTRACT_FEAT_MODE:
+        database.extractFeatureToFile(FEATURE_PATH, max_sample_num=10)
+    elif MODE == DataBaseType.TRAIN_TEST_MODE:
+        database.trainAndTest(LOAD_FEATURE_PATH_TRAIN, LOAD_FEATURE_PATH_TEST)
+    # train/test (separate)
+    # feat_train, golden1 = database.readFeatureFile(LOAD_FEATURE_PATH_TRAIN, 2000)
+    # feat_test, golden2 = database.readFeatureFile(LOAD_FEATURE_PATH_TEST)
     # database.train(feat_train, golden1)
     # index, result = database.test(feat_test, golden2)
     '''
