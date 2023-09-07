@@ -24,6 +24,8 @@ class DataBaseType:
     SYNTH_TYPE = 'synth'
     EXTRACT_FEAT_MODE = 1
     TRAIN_TEST_MODE = 2
+    TRAIN_ONLY_MODE = 3
+    TEST_ONLY_MODE = 4
 
 class DataBase:
     def __init__(self, database_path, database_type=DataBaseType.TEST_TYPE):
@@ -115,7 +117,7 @@ class DataBase:
         print('[INFO] HOG feature dimenstion: ' + str(np.shape(hog_result)))
         return hog_result
 
-    def readFeatureFile(self, file, sample_limit=-1, read_each_row=1):
+    def readFeatureFile(self, file, sample_limit=-1):
         print('[INFO] Load feature file...')
         feat = []
         golden = []
@@ -123,13 +125,11 @@ class DataBase:
             csv_reader = csv.reader(csv_file)
             count = 0
             for row in csv_reader:
-                count += 1
-                if sample_limit > 0 and count > sample_limit:
-                    break
-                if count % read_each_row != 0:
-                    continue
                 feat.append([float(x) for x in row[0].split(',')])
                 golden.append([float(x) for x in row[1].split(',')])
+                count += 1
+                if sample_limit > 0 and count >= sample_limit:
+                    break
         print('[INFO] ' + str(count) + ' rows are read')
         return np.array(feat), np.array(golden)
 
@@ -185,7 +185,8 @@ class DataBase:
             # CONTOUR: The prediction error (angle) is 17.705939503166988(13.112084351717627)
             # HOG: The prediction error (angle) is 16.80747035155666(11.283064643228085)
 
-    def train(self, feat, golden):
+    def train(self, train_file, sample_limit=-1):
+        feat, golden = database.readFeatureFile(train_file, sample_limit)
         print('[INFO] Train the feature...')
         n_sample = len(feat)
         if n_sample != len(golden):
@@ -197,7 +198,8 @@ class DataBase:
         with open(self.MODEL_PATH, 'wb') as model_file:
             pickle.dump(clf, model_file)
 
-    def test(self, feat, golden):
+    def test(self, test_file):
+        feat, golden = database.readFeatureFile(test_file)
         if len(feat) != len(golden):
             print('[ERROR] Feature size is not consistent with golden (' + str(len(feat)) + ' with ' + \
                 str(len(golden)) + ')')
@@ -208,7 +210,6 @@ class DataBase:
         product = [np.clip(np.dot(result[i] / np.linalg.norm(result[i]), golden[i] / np.linalg.norm(golden[i])), \
             -1.0, 1.0) for i in range(0, len(result))]
         diff = np.rad2deg(np.arccos(product))
-        print('[INFO] The prediction error is ' + str(metrics.mean_squared_error(result, golden)))
         print('[INFO] The prediction error (angle) is ' + str(np.average(diff)) + '(' + str(np.std(diff)) + ')')
         # show result distribution
         # sorted_diff = np.sort(diff)
@@ -249,7 +250,7 @@ class DataBase:
     POS_FEATURE_DOWNSIZE = 8
     HOG_PIXEL_WINDOW = 16
     # SVM parameter
-    # MODEL_PATH = 'model.pkl'
+    MODEL_PATH = 'model.pkl'
     # private variables
     image_list = []
 
@@ -258,18 +259,17 @@ if __name__ == '__main__':
     FEATURE_PATH = 'feature.csv'
     LOAD_FEATURE_PATH_TEST = '../s00-09/test_feature5.csv'
     LOAD_FEATURE_PATH_TRAIN = '../s00-09/synth_feature5.csv'
-    MODE = DataBaseType.TRAIN_TEST_MODE
+    MODE = DataBaseType.TEST_ONLY_MODE
     database = DataBase(DATABASE_PATH, DataBaseType.SYNTH_TYPE)
     # execute feature extraction or train/test
     if MODE == DataBaseType.EXTRACT_FEAT_MODE:
         database.extractFeatureToFile(FEATURE_PATH, max_sample_num=10)
     elif MODE == DataBaseType.TRAIN_TEST_MODE:
         database.trainAndTest(LOAD_FEATURE_PATH_TRAIN, LOAD_FEATURE_PATH_TEST)
-    # train/test (separate)
-    # feat_train, golden1 = database.readFeatureFile(LOAD_FEATURE_PATH_TRAIN, 2000)
-    # feat_test, golden2 = database.readFeatureFile(LOAD_FEATURE_PATH_TEST)
-    # database.train(feat_train, golden1)
-    # index, result = database.test(feat_test, golden2)
+    elif MODE == DataBaseType.TRAIN_ONLY_MODE:
+        database.train(LOAD_FEATURE_PATH_TRAIN, sample_limit=10)
+    elif MODE == DataBaseType.TEST_ONLY_MODE:
+        database.test(LOAD_FEATURE_PATH_TEST)
     '''
     # test codes
     SAMPLE_SHOW = 20000
