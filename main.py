@@ -26,6 +26,7 @@ class DataBaseType:
     TRAIN_TEST_MODE = 2
     TRAIN_ONLY_MODE = 3
     TEST_ONLY_MODE = 4
+    VISUALIZATION_MODE = 5
 
 class DataBase:
     def __init__(self, database_path, database_type=DataBaseType.TEST_TYPE):
@@ -186,7 +187,7 @@ class DataBase:
             # HOG: The prediction error (angle) is 16.80747035155666(11.283064643228085)
 
     def train(self, train_file, sample_limit=-1):
-        feat, golden = database.readFeatureFile(train_file, sample_limit)
+        feat, golden = self.readFeatureFile(train_file, sample_limit)
         print('[INFO] Train the feature...')
         n_sample = len(feat)
         if n_sample != len(golden):
@@ -198,8 +199,19 @@ class DataBase:
         with open(self.MODEL_PATH, 'wb') as model_file:
             pickle.dump(clf, model_file)
 
+    def testSingleCase(self, index=0):
+        image, golden_feat = self.loadImage(index)
+        # downsample image
+        pos_feat, contour = self.createPositionFeature(image)
+        hog_feat = self.createHogFeature(image)
+        current_feat = np.append(pos_feat, hog_feat)
+        with open(self.MODEL_PATH, 'rb') as model_file:
+            clf = pickle.load(model_file)
+        result = clf.predict(current_feat.reshape(1, -1))
+        return image, golden_feat, contour, result
+
     def test(self, test_file):
-        feat, golden = database.readFeatureFile(test_file)
+        feat, golden = self.readFeatureFile(test_file)
         if len(feat) != len(golden):
             print('[ERROR] Feature size is not consistent with golden (' + str(len(feat)) + ' with ' + \
                 str(len(golden)) + ')')
@@ -225,15 +237,15 @@ class DataBase:
         # generate feature csv
         with open(FEATURE_PATH, 'w', newline='') as csv_file:
             writer = csv.writer(csv_file)
-            list_len = len(database.image_list)
+            list_len = len(self.image_list)
             if max_sample_num > 0:
                 list_len = max_sample_num
             for index in range(0, list_len):
                 print('[INFO] Progress: ' + str(index + 1) + '/' + str(list_len))
-                image, golden_feat = database.loadImage(index)
+                image, golden_feat = self.loadImage(index)
                 # downsample image
-                contour, pos_feat = database.createPositionFeature(image)
-                hog_feat = database.createHogFeature(image)
+                pos_feat, _ = self.createPositionFeature(image)
+                hog_feat = self.createHogFeature(image)
                 current_feat = np.append(pos_feat, hog_feat)
                 writer.writerow([','.join([str(x) for x in current_feat]), ','.join([str(x) for x in golden_feat[0: 3]])])
 
@@ -259,24 +271,18 @@ if __name__ == '__main__':
     FEATURE_PATH = 'feature.csv'
     LOAD_FEATURE_PATH_TEST = '../s00-09/test_feature5.csv'
     LOAD_FEATURE_PATH_TRAIN = '../s00-09/synth_feature5.csv'
-    MODE = DataBaseType.TEST_ONLY_MODE
-    database = DataBase(DATABASE_PATH, DataBaseType.SYNTH_TYPE)
+    MODE = DataBaseType.VISUALIZATION_MODE
+    database = DataBase(DATABASE_PATH, DataBaseType.TEST_TYPE)
     # execute feature extraction or train/test
     if MODE == DataBaseType.EXTRACT_FEAT_MODE:
         database.extractFeatureToFile(FEATURE_PATH, max_sample_num=10)
     elif MODE == DataBaseType.TRAIN_TEST_MODE:
         database.trainAndTest(LOAD_FEATURE_PATH_TRAIN, LOAD_FEATURE_PATH_TEST)
     elif MODE == DataBaseType.TRAIN_ONLY_MODE:
-        database.train(LOAD_FEATURE_PATH_TRAIN, sample_limit=10)
+        database.train(LOAD_FEATURE_PATH_TRAIN, sample_limit=144 * 6)
     elif MODE == DataBaseType.TEST_ONLY_MODE:
         database.test(LOAD_FEATURE_PATH_TEST)
-    '''
-    # test codes
-    SAMPLE_SHOW = 20000
-    temp_index = index[SAMPLE_SHOW]
-    temp_result = result[temp_index]
-    image, golden_feat = database.loadImage(temp_index)
-    contour, _ = database.createPositionFeature(image)
-    database.showImageIn3dPlot(image, golden_feat, contour, temp_result)
-    '''
+    elif MODE == DataBaseType.VISUALIZATION_MODE:
+        image, golden_feat, contour, predict_feat = database.testSingleCase(1)
+        database.showImageIn3dPlot(image, golden_feat, contour, predict_feat[0])
     sys.exit()
