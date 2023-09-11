@@ -14,6 +14,7 @@ from skimage.segmentation import chan_vese
 from sklearn import metrics
 from sklearn import svm
 from sklearn.decomposition import PCA
+from sklearn.multioutput import ClassifierChain
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.preprocessing import StandardScaler
 import sys
@@ -52,19 +53,31 @@ class DataBase:
                                     'feature': feature})
                                 row_count += 1
 
-    def showImageIn3dPlot(self, image, golden_feat, contour=[], predict_feat=[]):
+    def showImageIn3dPlot(self, image, golden_feat, contour=[], predict_feat=[], show_arrow=False, \
+        save_figure1=False, index=None):
         fig = plt.figure()
         width = image.shape[1]
         height = image.shape[0]
         # show 2D plot
         ax1 = fig.add_subplot(221)
         ax1.imshow(image, cmap='gray')
-        plt.arrow(width / 2.0, height / 2.0, golden_feat[0] * self.DISPLAY_COEFFICIENT, \
-            golden_feat[1] * self.DISPLAY_COEFFICIENT, width=self.DISPLAY_ARROW_SIZE)
-        if len(predict_feat) > 0:
-            plt.arrow(width / 2.0, height / 2.0, predict_feat[0] * self.DISPLAY_COEFFICIENT, \
-                predict_feat[1] * self.DISPLAY_COEFFICIENT, \
-                width=self.DISPLAY_ARROW_SIZE, color='red')
+        if show_arrow:
+            plt.arrow(width / 2.0, height / 2.0, golden_feat[0] * self.DISPLAY_COEFFICIENT, \
+                golden_feat[1] * self.DISPLAY_COEFFICIENT, width=self.DISPLAY_ARROW_SIZE)
+            if len(predict_feat) > 0:
+                plt.arrow(width / 2.0, height / 2.0, predict_feat[0] * self.DISPLAY_COEFFICIENT, \
+                    predict_feat[1] * self.DISPLAY_COEFFICIENT, \
+                    width=self.DISPLAY_ARROW_SIZE, color='red')
+        # show key points
+        if len(contour) > 0:
+            print('[INFO] Contour points number: ' + str(len(contour)))
+            ax1.plot(np.append(contour[:, 0], contour[0, 0]), np.append(contour[:, 1], contour[0, 1]), '-r', lw=3)
+        if save_figure1:
+            ax1.axis('off')
+            file_name = 'figure.png'
+            if index:
+                file_name = str(index) + '.png'
+            fig.savefig(file_name, bbox_inches=ax1.get_window_extent().transformed(fig.dpi_scale_trans.inverted()))
         # show 3D plot
         ax2 = fig.add_subplot(222, projection='3d')
         xx, yy = np.meshgrid(np.linspace(0, width, width), np.linspace(0, height, height))
@@ -77,10 +90,6 @@ class DataBase:
         # show chan vese result
         ax3 = fig.add_subplot(223)
         ax3.imshow(chan_vese(image), cmap='gray')
-        # show key points
-        if len(contour) > 0:
-            print('[INFO] Contour points number: ' + str(len(contour)))
-            ax3.plot(contour[:, 0], contour[:, 1], '-r', lw=3)
         plt.show()
 
     def loadImage(self, index=0):
@@ -107,7 +116,7 @@ class DataBase:
         pos_feat = contour_image.flatten()
         print('[INFO] Position feature dimenstion: ' + str(np.shape(pos_feat)))
         if return_contour:
-            contours, _= cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours, _= cv2.findContours(np.asarray(binary, dtype='uint8'), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             largest_contour = np.reshape(max(contours, key=cv2.contourArea), (-1, 2))
             return pos_feat, largest_contour
         return pos_feat, []
@@ -151,9 +160,9 @@ class DataBase:
                 for row in csv_reader_train:
                     if count >= TRAIN_CLUSTER_SIZE:
                         break
-                    # train_feat.append([float(x) for x in row[0].split(',')])
+                    train_feat.append([float(x) for x in row[0].split(',')])
                     # train_feat.append([float(x) for x in row[0].split(',')][0: 28])
-                    train_feat.append([float(x) for x in row[0].split(',')][28: -1])
+                    # train_feat.append([float(x) for x in row[0].split(',')][28: -1])
                     train_golden.append([float(x) for x in row[1].split(',')])
                     count += 1
                 test_feat = []
@@ -162,15 +171,23 @@ class DataBase:
                 for row in csv_reader_test:
                     if count >= TEST_CLUSTER_SIZE:
                         break
-                    # test_feat.append([float(x) for x in row[0].split(',')])
+                    test_feat.append([float(x) for x in row[0].split(',')])
                     # test_feat.append([float(x) for x in row[0].split(',')][0: 28])
-                    test_feat.append([float(x) for x in row[0].split(',')][28: -1])
+                    # test_feat.append([float(x) for x in row[0].split(',')][28: -1])
                     test_golden.append([float(x) for x in row[1].split(',')])
                     count += 1
                 # train model
                 clf = MultiOutputRegressor(svm.SVR())
+                # sc_x = StandardScaler()
+                # sc_y = StandardScaler()
+                # Scale x and y
+                # x = sc_x.fit_transform(train_feat)
+                # y = sc_y.fit_transform(train_golden)
+                # clf.fit(x, y)
                 clf.fit(train_feat, train_golden)
                 # test model
+                # x = sc_x.fit_transform(test_feat)
+                # result = sc_y.inverse_transform(clf.predict(x))
                 result = clf.predict(test_feat)
                 product = [np.clip(np.dot(result[i] / np.linalg.norm(result[i]), \
                     test_golden[i] / np.linalg.norm(test_golden[i])), \
@@ -183,8 +200,11 @@ class DataBase:
             # POS_FEAT_DIM = 28
             # HOG_FEAT_DIM = 54
             # ALL: The prediction error (angle) is 15.244228263459785(11.286796067850444)
+            #    16.41812944857674(11.118308648586126)
             # CONTOUR: The prediction error (angle) is 17.705939503166988(13.112084351717627)
+            #    18.05251460033637(12.496220560725279)
             # HOG: The prediction error (angle) is 16.80747035155666(11.283064643228085)
+            #    17.91005449202722(11.547989233324921) (fit)
 
     def train(self, train_file, sample_limit=-1):
         feat, golden = self.readFeatureFile(train_file, sample_limit)
@@ -202,7 +222,7 @@ class DataBase:
     def testSingleCase(self, index=0):
         image, golden_feat = self.loadImage(index)
         # downsample image
-        pos_feat, contour = self.createPositionFeature(image)
+        pos_feat, contour = self.createPositionFeature(image, True)
         hog_feat = self.createHogFeature(image)
         current_feat = np.append(pos_feat, hog_feat)
         with open(self.MODEL_PATH, 'rb') as model_file:
@@ -272,7 +292,7 @@ if __name__ == '__main__':
     LOAD_FEATURE_PATH_TEST = '../s00-09/test_feature5.csv'
     LOAD_FEATURE_PATH_TRAIN = '../s00-09/synth_feature5.csv'
     MODE = DataBaseType.VISUALIZATION_MODE
-    database = DataBase(DATABASE_PATH, DataBaseType.TEST_TYPE)
+    database = DataBase(DATABASE_PATH)
     # execute feature extraction or train/test
     if MODE == DataBaseType.EXTRACT_FEAT_MODE:
         database.extractFeatureToFile(FEATURE_PATH, max_sample_num=10)
@@ -283,6 +303,7 @@ if __name__ == '__main__':
     elif MODE == DataBaseType.TEST_ONLY_MODE:
         database.test(LOAD_FEATURE_PATH_TEST)
     elif MODE == DataBaseType.VISUALIZATION_MODE:
-        image, golden_feat, contour, predict_feat = database.testSingleCase(1)
-        database.showImageIn3dPlot(image, golden_feat, contour, predict_feat[0])
+        image_index = 33
+        image, golden_feat, contour, predict_feat = database.testSingleCase(image_index)
+        database.showImageIn3dPlot(image, golden_feat, contour, predict_feat[0], save_figure1=True, index=image_index)
     sys.exit()
