@@ -7,12 +7,12 @@ from tensorflow.keras.utils import img_to_array
 from tensorflow.keras.applications import resnet50
 
 if __name__ == '__main__':
-    filename = 'banana.jpg' 
+    filename = 'eye.bmp' 
     ## load an image in PIL format 
     original = load_img(filename, target_size=(224, 224)) 
     print('PIL image size', original.size)
-    # plt.imshow(original) 
-    # plt.show()
+    plt.imshow(original) 
+    plt.show()
     # convert the PIL image to a numpy array 
     numpy_image = img_to_array(original) 
     plt.imshow(np.uint8(numpy_image)) 
