@@ -23,7 +23,7 @@ if __name__ == '__main__':
     # prepare the image for the resnet50 model 
     processed_image = resnet50.preprocess_input(image_batch.copy()) 
     # create resnet model 
-    resnet_model = resnet50.ResNet50(weights='imagenet')
+    resnet_model = resnet50.ResNet50()
     resnet_model.trainable = False
     # get the predicted probabilities for each class 
     predictions = resnet_model.predict(processed_image) 
