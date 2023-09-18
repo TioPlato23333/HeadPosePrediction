@@ -1,7 +1,7 @@
-import PIL 
 import matplotlib.pyplot as plt 
 import numpy as np 
 import tensorflow as tf
+from PIL import Image
 from keras.applications.imagenet_utils import decode_predictions
 from tensorflow.keras.utils import load_img
 from tensorflow.keras.utils import img_to_array 
@@ -15,7 +15,7 @@ if __name__ == '__main__':
     # plt.imshow(original) 
     # plt.show()
     # convert the PIL image to a numpy array 
-    numpy_image = img_to_array(original) 
+    numpy_image = img_to_array(original)
     plt.imshow(np.uint8(numpy_image)) 
     print('numpy array size', numpy_image.shape) 
     # Convert the image / images into batch format 
@@ -31,9 +31,18 @@ if __name__ == '__main__':
     # convert the probabilities to class labels 
     label = decode_predictions(predictions)
     print(label)
-    # extract middle layer output 
+    # extract middle layer output
     feature_extractor = tf.keras.Model(inputs=resnet_model.inputs, \
         outputs=[layer.output for layer in resnet_model.layers])
     features = feature_extractor(processed_image)
-    for i in range(len(features)):
-        print(features[i].shape)
+    for feature in features:
+        feat_array = feature.numpy()
+        for i in range(feat_array.shape[-1]):
+            raw_img = (feat_array[0, ..., i] * 255).astype(np.uint8)
+            if raw_img.ndim != 2:
+                print('[INFO] Image ' + str(feat_array.shape) + ' can not be visualized.')
+                continue
+            img = Image.fromarray(raw_img)
+            img_name = str(feat_array.shape) + '_' + str(i) + '.jpg'
+            img.save('temp_result/' + img_name)
+            print('[INFO] Image ' + img_name + ' saved.')
