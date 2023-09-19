@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt 
-import numpy as np 
+import numpy as np
+import os
 import tensorflow as tf
 from PIL import Image
 from keras.applications.imagenet_utils import decode_predictions
@@ -35,6 +36,9 @@ if __name__ == '__main__':
     feature_extractor = tf.keras.Model(inputs=resnet_model.inputs, \
         outputs=[layer.output for layer in resnet_model.layers])
     features = feature_extractor(processed_image)
+    IMG_DIR = 'temp_result/'
+    if not os.path.exists(IMG_DIR):
+        os.makedirs(IMG_DIR)
     for feature in features:
         feat_array = feature.numpy()
         for i in range(feat_array.shape[-1]):
@@ -44,5 +48,5 @@ if __name__ == '__main__':
                 continue
             img = Image.fromarray(raw_img)
             img_name = str(feat_array.shape) + '_' + str(i) + '.jpg'
-            img.save('temp_result/' + img_name)
+            img.save(IMG_DIR + img_name)
             print('[INFO] Image ' + img_name + ' saved.')
