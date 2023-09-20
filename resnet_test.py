@@ -9,7 +9,7 @@ from tensorflow.keras.utils import img_to_array
 from tensorflow.keras.applications import resnet50
 
 if __name__ == '__main__':
-    filename = 'eye.bmp' 
+    filename = 'banana.jpg' 
     ## load an image in PIL format 
     original = load_img(filename, target_size=(224, 224)) 
     print('PIL image size', original.size)
@@ -25,13 +25,15 @@ if __name__ == '__main__':
     # prepare the image for the resnet50 model 
     processed_image = resnet50.preprocess_input(image_batch.copy()) 
     # create resnet model 
-    resnet_model = resnet50.ResNet50()
-    resnet_model.trainable = False
+    # resnet_model = resnet50.ResNet50()
+    # resnet_model.save_weights('./weights/')
+    resnet_model = resnet50.ResNet50(weights='./weights/')
     # get the predicted probabilities for each class 
     predictions = resnet_model.predict(processed_image) 
     # convert the probabilities to class labels 
     label = decode_predictions(predictions)
     print(label)
+    '''
     # extract middle layer output
     feature_extractor = tf.keras.Model(inputs=resnet_model.inputs, \
         outputs=[layer.output for layer in resnet_model.layers])
@@ -50,3 +52,4 @@ if __name__ == '__main__':
             img_name = str(feat_array.shape) + '_' + str(i) + '.jpg'
             img.save(IMG_DIR + img_name)
             print('[INFO] Image ' + img_name + ' saved.')
+    '''
