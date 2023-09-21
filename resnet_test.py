@@ -39,8 +39,8 @@ if __name__ == '__main__':
     resnet_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=[tf.keras.metrics.BinaryAccuracy(), tf.keras.metrics.FalseNegatives()])
-    data = tf.random.uniform([1, 224, 224, 3]);
-    labels = tf.random.uniform([1, 1000]);
+    data = tf.random.uniform([1, 224, 224, 3])
+    labels = tf.random.uniform([1, 1000])
     resnet_model.fit(data, labels)
     predictions2 = resnet_model.predict(processed_image)
     # convert the probabilities to class labels
