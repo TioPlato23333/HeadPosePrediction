@@ -28,11 +28,24 @@ if __name__ == '__main__':
     # resnet_model = resnet50.ResNet50()
     # resnet_model.save_weights('./weights/')
     resnet_model = resnet50.ResNet50(weights='./weights/')
-    # get the predicted probabilities for each class 
-    predictions = resnet_model.predict(processed_image) 
-    # convert the probabilities to class labels 
+    # get the predicted probabilities for each class
+    predictions = resnet_model.predict(processed_image)
+    # convert the probabilities to class labels
     label = decode_predictions(predictions)
     print(label)
+    # try fit function
+    print(processed_image.shape)
+    print(predictions.shape)
+    resnet_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+        loss=tf.keras.losses.BinaryCrossentropy(),
+        metrics=[tf.keras.metrics.BinaryAccuracy(), tf.keras.metrics.FalseNegatives()])
+    data = tf.random.uniform([1, 224, 224, 3]);
+    labels = tf.random.uniform([1, 1000]);
+    resnet_model.fit(data, labels)
+    predictions2 = resnet_model.predict(processed_image)
+    # convert the probabilities to class labels
+    label2 = decode_predictions(predictions2)
+    print(label2)
     '''
     # extract middle layer output
     feature_extractor = tf.keras.Model(inputs=resnet_model.inputs, \
