@@ -1,12 +1,21 @@
 import matplotlib.pyplot as plt 
 import numpy as np
+import pandas as pd
 import os
+import sys
 import tensorflow as tf
 from PIL import Image
 from keras.applications.imagenet_utils import decode_predictions
 from tensorflow.keras.utils import load_img
 from tensorflow.keras.utils import img_to_array 
 from tensorflow.keras.applications import resnet50
+
+def printNetworkSummary2File(model, file):
+    original_stdout = sys.stdout
+    with open(file, 'w') as f:
+        sys.stdout = f
+        model.summary()
+        sys.stdout = original_stdout
 
 if __name__ == '__main__':
     filename = 'banana.jpg' 
@@ -28,11 +37,13 @@ if __name__ == '__main__':
     # resnet_model = resnet50.ResNet50()
     # resnet_model.save_weights('./weights/')
     resnet_model = resnet50.ResNet50(weights='./weights/')
+    printNetworkSummary2File(resnet_model, 'network_summary')
     # get the predicted probabilities for each class
     predictions = resnet_model.predict(processed_image)
     # convert the probabilities to class labels
     label = decode_predictions(predictions)
     print(label)
+    '''
     # try fit function
     print(processed_image.shape)
     print(predictions.shape)
@@ -46,6 +57,7 @@ if __name__ == '__main__':
     # convert the probabilities to class labels
     label2 = decode_predictions(predictions2)
     print(label2)
+    '''
     '''
     # extract middle layer output
     feature_extractor = tf.keras.Model(inputs=resnet_model.inputs, \
