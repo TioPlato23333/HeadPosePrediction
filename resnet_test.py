@@ -35,14 +35,24 @@ if __name__ == '__main__':
     processed_image = resnet50.preprocess_input(image_batch.copy()) 
     # create resnet model 
     # resnet_model = resnet50.ResNet50()
-    # resnet_model.save_weights('./weights/')
-    resnet_model = resnet50.ResNet50(weights='./weights/')
+    resnet_model = resnet50.ResNet50(weights='./weights/', include_top=False)
     printNetworkSummary2File(resnet_model, 'network_summary')
+    resnet_model.save_weights('./weights/')
+    # try to use another architecture
+    inputs = tf.keras.Input(shape=(224, 224, 3))
+    x = resnet_model(inputs, training=False)
+    x = tf.keras.layers.GlobalAveragePooling2D()(x)
+    x = tf.keras.layers.Dropout(0.2)(x)
+    outputs = tf.keras.layers.Dense(1)(x)
+    model = tf.keras.Model(inputs, outputs)
+    printNetworkSummary2File(model, 'network_summary_2')
+    '''
     # get the predicted probabilities for each class
     predictions = resnet_model.predict(processed_image)
     # convert the probabilities to class labels
     label = decode_predictions(predictions)
     print(label)
+    '''
     '''
     # try fit function
     print(processed_image.shape)
