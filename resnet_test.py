@@ -41,9 +41,9 @@ if __name__ == '__main__':
     # try to use another architecture
     inputs = tf.keras.Input(shape=(224, 224, 3))
     x = resnet_model(inputs, training=False)
-    x = tf.keras.layers.GlobalAveragePooling2D()(x)
+    # x = tf.keras.layers.GlobalAveragePooling2D()(x)
     x = tf.keras.layers.Dropout(0.2)(x)
-    outputs = tf.keras.layers.Dense(1)(x)
+    outputs = tf.keras.layers.Dense(2)(x)
     model = tf.keras.Model(inputs, outputs)
     printNetworkSummary2File(model, 'network_summary_2')
     '''
