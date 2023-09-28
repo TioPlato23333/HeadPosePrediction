@@ -6,7 +6,8 @@ if __name__ == '__main__':
     inputs = tf.keras.Input(shape=(10, 10, 1))
     # outputs = tf.keras.layers.Conv2D(1, 3, input_shape=(10, 10, 1))(inputs)
     # outputs = tf.keras.layers.Dense(1)(inputs)
-    outputs = tf.keras.layers.MaxPooling2D()(inputs)
+    # outputs = tf.keras.layers.MaxPooling2D()(inputs)
+    outputs = tf.keras.layers.BatchNormalization()(inputs)
     # model
     model = tf.keras.Model(inputs, outputs)
     print('[INFO] Layer architecture:')
@@ -14,7 +15,8 @@ if __name__ == '__main__':
         print(layer.output)
     # test
     # image = np.ones((1, 10, 10, 1))
-    image = tf.random.uniform((1, 10, 10, 1))
+    # image = tf.random.uniform((1, 10, 10, 1))
+    image = np.arange(100).reshape(1, 10, 10, 1)
     print('[INFO] Input/output:')
     print(image)
     print(model.predict(image))
